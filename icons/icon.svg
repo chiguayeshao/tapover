@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Tapover">
+  <title>Tapover</title>
+  <rect width="128" height="128" rx="28" fill="#101218"/>
+  <defs>
+    <clipPath id="left"><rect x="0" y="0" width="64" height="128"/></clipPath>
+    <clipPath id="right"><rect x="64" y="0" width="64" height="128"/></clipPath>
+  </defs>
+  <polygon points="26,22 108,64 26,106 26,82 68,64 26,46" fill="#12b981" clip-path="url(#left)"/>
+  <polygon points="26,22 108,64 26,106 26,82 68,64 26,46" fill="#e11d48" clip-path="url(#right)"/>
+  <rect x="64" y="64" width="14" height="14" fill="#eceef3" transform="rotate(45 64 64)"/>
+</svg>

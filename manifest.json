@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "Tapover",
+  "version": "0.3.0",
+  "description": "在 GMGN 代币页确认，用 FOMO 自己的买卖卡成交。非官方。",
+  "homepage_url": "https://github.com/chiguayeshao/tapover",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "Tapover",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["tabs", "storage", "scripting"],
+  "host_permissions": [
+    "https://gmgn.ai/*",
+    "https://fomo.family/*",
+    "https://www.fomo.family/*",
+    "https://prod-api.fomo.family/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://gmgn.ai/*"],
+      "js": ["content-gmgn.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://fomo.family/*", "https://www.fomo.family/*"],
+      "js": ["content-fomo.js"],
+      "run_at": "document_start"
+    }
+  ]
+}
