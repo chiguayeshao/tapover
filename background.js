@@ -249,7 +249,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
     findPrefetchTab()
       .then(async (tab) => {
-        if (!tab) return { ok: false, error: "没有可复用的 FOMO 标签。打开并登录 fomo.family（不要只用 profile 页）。" };
+        if (!tab) return { ok: false, error: "没有可复用的 FOMO 标签。打开并登录 https://fomo.family/r/0x_JBCat（不要只用 profile 页）。" };
         await setBridgeTabId(tab.id);
         if (fomoUrl.startsWith("https://fomo.family/") || fomoUrl.startsWith("https://www.fomo.family/")) {
           const already = tabHref(tab) && sameTokenUrl(tabHref(tab), fomoUrl);

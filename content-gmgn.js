@@ -749,7 +749,7 @@ async function prefetch(token) {
     lastPrefetchKey = "";
     if (root) {
       if (res?.mode === "missing-tab") {
-        setStatus(root, "没找到可复用的 FOMO 标签。打开并登录 fomo.family（不要只用 profile 页）", "warn");
+        setStatus(root, "没找到可复用的 FOMO 标签。打开并登录 https://fomo.family/r/0x_JBCat（不要只用 profile 页）", "warn");
       } else {
         setStatus(root, res?.error || "FOMO 预热失败，点确认仍会尝试下单", "warn");
       }
@@ -776,7 +776,7 @@ async function refreshStatus(token) {
     } else if (res?.ok) {
       setStatus(root, "找到 FOMO 标签，但还没登录态。在 FOMO 里点一下任意页。", "warn");
     } else {
-      setStatus(root, res?.error || "打开并登录 fomo.family，再刷新那一页", "warn");
+      setStatus(root, res?.error || "打开并登录 https://fomo.family/r/0x_JBCat，再刷新那一页", "warn");
     }
   } catch {
     if (root) setStatus(root, "扩展后台未响应，去 chrome://extensions 刷新本扩展", "err");
