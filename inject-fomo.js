@@ -14,6 +14,7 @@
   let lastSwapOk = false;
   let lastUserId = "";
   let lastBalances = null;
+  let navGen = 0;
   const FOMO_API = "https://prod-api.fomo.family";
 
   function looksLikeJwt(s) {
@@ -189,12 +190,16 @@
     return null;
   }
 
-  async function waitTradeCard(timeoutMs) {
+  async function waitTokenTradeCard(address, timeoutMs) {
+    const needle = String(address || "").toLowerCase();
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
-      const found = findTradeCard();
-      if (found) return found;
-      await sleep(200);
+      const onPage = !needle || location.href.toLowerCase().includes(needle);
+      if (onPage) {
+        const found = findTradeCard();
+        if (found) return found;
+      }
+      await sleep(150);
     }
     throw new Error("FOMO 代币页还没出买卖卡。确认标签已打开这个币，并已登录。");
   }
@@ -215,6 +220,128 @@
       if (k.startsWith("__reactFiber") || k.startsWith("__reactInternalInstance")) return el[k];
     }
     return null;
+  }
+
+  function looksLikeRouter(obj) {
+    return Boolean(
+      obj &&
+        typeof obj.navigate === "function" &&
+        obj.state &&
+        obj.state.location
+    );
+  }
+
+  function walkRouter(start) {
+    const seen = new Set();
+    const stack = start ? [start] : [];
+    let n = 0;
+    while (stack.length && n++ < 12000) {
+      const f = stack.pop();
+      if (!f || seen.has(f)) continue;
+      seen.add(f);
+      const props = f.memoizedProps || f.pendingProps;
+      if (looksLikeRouter(props && props.router)) return props.router;
+      if (looksLikeRouter(f.stateNode && f.stateNode.router)) return f.stateNode.router;
+      if (looksLikeRouter(f.memoizedState && f.memoizedState.router)) return f.memoizedState.router;
+      if (f.child) stack.push(f.child);
+      if (f.sibling) stack.push(f.sibling);
+    }
+    return null;
+  }
+
+  function fiberFromEl(el) {
+    const direct = getFiber(el);
+    if (direct) return direct;
+    if (!el) return null;
+    for (const k of Object.keys(el)) {
+      if (k.startsWith("__reactContainer$")) {
+        const root = el[k];
+        return (root && root.stateNode && root.stateNode.current) || root;
+      }
+    }
+    return null;
+  }
+
+  function findRouterInFiber() {
+    const nodes = [document.body, document.documentElement];
+    if (document.body) nodes.push(...document.body.children);
+    for (const el of nodes) {
+      const found = walkRouter(fiberFromEl(el));
+      if (found) return found;
+    }
+    return null;
+  }
+
+  function getRouter() {
+    const w = window;
+    if (looksLikeRouter(w.__reactRouterDataRouter)) return w.__reactRouterDataRouter;
+    if (looksLikeRouter(w.__remixRouter)) return w.__remixRouter;
+    return findRouterInFiber();
+  }
+
+  function parseDest(url) {
+    try {
+      const u = new URL(url, location.origin);
+      if (u.origin !== location.origin) return null;
+      return u;
+    } catch {
+      return null;
+    }
+  }
+
+  function samePath(href, destHref) {
+    try {
+      const a = new URL(href, location.origin);
+      const b = new URL(destHref, location.origin);
+      return a.pathname.replace(/\/$/, "") === b.pathname.replace(/\/$/, "");
+    } catch {
+      return false;
+    }
+  }
+
+  async function waitRouter(timeoutMs) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const router = getRouter();
+      if (router) return router;
+      await sleep(80);
+    }
+    return getRouter();
+  }
+
+  async function spaNavigate(url) {
+    const dest = parseDest(url);
+    if (!dest) return { ok: false, mode: "bad-url" };
+    const to = dest.pathname + dest.search + dest.hash;
+    if (samePath(location.href, dest.href)) return { ok: true, mode: "already" };
+
+    const gen = ++navGen;
+    const router = await waitRouter(4000);
+    if (gen !== navGen) return { ok: false, mode: "superseded" };
+    if (!router || typeof router.navigate !== "function") {
+      return { ok: false, mode: "no-router" };
+    }
+
+    try {
+      await router.navigate(to);
+    } catch (err) {
+      if (gen !== navGen) return { ok: false, mode: "superseded" };
+      return {
+        ok: false,
+        mode: "navigate-error",
+        error: String(err && err.message ? err.message : err),
+      };
+    }
+
+    const start = Date.now();
+    while (Date.now() - start < 8000) {
+      if (gen !== navGen) return { ok: false, mode: "superseded" };
+      if (samePath(location.href, dest.href)) return { ok: true, mode: "spa" };
+      await sleep(50);
+    }
+    if (gen !== navGen) return { ok: false, mode: "superseded" };
+    if (samePath(location.href, dest.href)) return { ok: true, mode: "spa" };
+    return { ok: false, mode: "timeout" };
   }
 
   function invokeReactClick(el) {
@@ -327,7 +454,7 @@
     harvestPrivyStorage();
     const side = payload.side === "sell" ? "sell" : "buy";
     const usd = Number(payload.amountUsd);
-    let ui = await waitTradeCard(20000);
+    let ui = await waitTokenTradeCard(payload.address, 20000);
     pickTab(ui, side);
     await sleep(300);
     ui = findTradeCard() || ui;
@@ -598,6 +725,13 @@
       readPosition(d.payload || {})
         .then((result) => reply(result))
         .catch((err) => reply({ ok: false, hasPosition: false, error: String(err && err.message ? err.message : err) }));
+      return;
+    }
+
+    if (d.type === "NAVIGATE") {
+      spaNavigate((d.payload && d.payload.url) || "")
+        .then((result) => reply(result))
+        .catch((err) => reply({ ok: false, mode: "error", error: String(err && err.message ? err.message : err) }));
       return;
     }
 

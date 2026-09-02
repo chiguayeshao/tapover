@@ -149,21 +149,49 @@ async function pingFomoTab(tab) {
   }
 }
 
+async function trySpaNavigate(tabId, fomoUrl) {
+  await ensureInject(tabId);
+  try {
+    return await chrome.tabs.sendMessage(tabId, {
+      type: "FOMO_NAVIGATE",
+      payload: { url: fomoUrl },
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function navigateFomoTab(tab, fomoUrl, activate) {
+  const current = tabHref(tab);
+  if (current && sameTokenUrl(current, fomoUrl)) {
+    if (activate) await chrome.tabs.update(tab.id, { active: true });
+    return { ok: true, mode: "already", tabId: tab.id };
+  }
+
+  let res = await trySpaNavigate(tab.id, fomoUrl);
+  if (!res?.ok && res?.mode !== "superseded" && tab.status && tab.status !== "complete") {
+    await waitTabComplete(tab.id, 8000);
+    res = await trySpaNavigate(tab.id, fomoUrl);
+  }
+  if (res?.ok) {
+    if (activate) await chrome.tabs.update(tab.id, { active: true });
+    return { ...res, tabId: tab.id };
+  }
+  if (res?.mode === "superseded") {
+    return { ok: false, mode: "superseded", tabId: tab.id };
+  }
+
+  await chrome.tabs.update(tab.id, { url: fomoUrl, active: Boolean(activate) });
+  await waitTabComplete(tab.id, 20000, fomoUrl);
+  return { ok: true, mode: "hard", tabId: tab.id };
+}
+
 async function prefetchFomo(fomoUrl) {
   const existing = await findPrefetchTab();
   if (!existing) return { ok: false, mode: "missing-tab" };
 
   await setBridgeTabId(existing.id);
-  const current = tabHref(existing);
-  const alreadyThere = current && sameTokenUrl(current, fomoUrl);
-  if (!alreadyThere) {
-    await chrome.tabs.update(existing.id, { url: fomoUrl, active: false });
-  }
-  return {
-    ok: true,
-    mode: alreadyThere ? "already" : "navigate",
-    tabId: existing.id,
-  };
+  return navigateFomoTab(existing, fomoUrl, false);
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -252,14 +280,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (!tab) return { ok: false, error: "没有可复用的 FOMO 标签。打开并登录 https://fomo.family/r/0x_JBCat（不要只用 profile 页）。" };
         await setBridgeTabId(tab.id);
         if (fomoUrl.startsWith("https://fomo.family/") || fomoUrl.startsWith("https://www.fomo.family/")) {
-          const already = tabHref(tab) && sameTokenUrl(tabHref(tab), fomoUrl);
-          if (!already) {
-            await chrome.tabs.update(tab.id, { url: fomoUrl, active: true });
-            await waitTabComplete(tab.id, 20000, fomoUrl);
-            await new Promise((r) => setTimeout(r, 1200));
-          } else {
-            await chrome.tabs.update(tab.id, { active: true });
-          }
+          const nav = await navigateFomoTab(tab, fomoUrl, true);
+          if (nav?.mode === "hard") await new Promise((r) => setTimeout(r, 400));
         } else {
           await chrome.tabs.update(tab.id, { active: true });
         }

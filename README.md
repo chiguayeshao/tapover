@@ -33,6 +33,18 @@ Robinhood 上的币走 FOMO 的 Robinhood 交易卡，界面计价是 USDG。卖
 扫链：[FOMO](https://fomo.family/r/0x_JBCat)
 交易：[GMGN](https://gmgn.ai/r/TM05q4qC?chain=robinhood)
 
+## 更新日志
+
+### 0.3.1 — 2026-09-02
+
+GMGN 上点 token 时，FOMO 不再整页刷新。跟你在 FOMO 里点 token 看 K 线一样，只局部换图表和买卖卡。
+
+更新后：`chrome://extensions` 刷新 Tapover，再分别刷新 GMGN 代币页和 FOMO 标签。旧页面里的脚本不会自动换成新逻辑。
+
+### 0.3.0
+
+首个 MIT 公开发布。
+
 ## 许可
 
 当前版本以 [MIT](LICENSE) 发布，可免费使用、修改和再分发。

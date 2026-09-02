@@ -31,10 +31,17 @@ function callPage(type, payload, timeoutMs) {
   });
 }
 
+const PAGE_CALL = {
+  FOMO_PING: ["PING", 4000],
+  FOMO_SWAP: ["SWAP", 90000],
+  FOMO_POSITION: ["POSITION", 12000],
+  FOMO_NAVIGATE: ["NAVIGATE", 16000],
+};
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (!msg || (msg.type !== "FOMO_PING" && msg.type !== "FOMO_SWAP" && msg.type !== "FOMO_POSITION")) return;
-  const type = msg.type === "FOMO_SWAP" ? "SWAP" : msg.type === "FOMO_POSITION" ? "POSITION" : "PING";
-  const timeout = type === "SWAP" ? 90000 : type === "POSITION" ? 12000 : 4000;
+  const mapped = msg && PAGE_CALL[msg.type];
+  if (!mapped) return;
+  const [type, timeout] = mapped;
   callPage(type, msg.payload || {}, timeout)
     .then(sendResponse)
     .catch((err) => sendResponse({ ok: false, error: String(err?.message || err) }));

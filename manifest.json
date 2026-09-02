@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Tapover",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "在 GMGN 代币页确认，用 FOMO 自己的买卖卡成交。非官方。",
   "homepage_url": "https://github.com/chiguayeshao/tapover",
   "icons": {
