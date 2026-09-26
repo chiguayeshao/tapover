@@ -29,6 +29,18 @@ let lastPercent = 100;
 let lastPosition = { hasPosition: false, usd: 0, tokenAmount: 0, symbol: "", cashUsd: 0 };
 let positionKey = "";
 let positionBusy = false;
+let panelHidden = false;
+
+const ICON_CHEVRON_UP = `
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="18 15 12 9 6 15"></polyline>
+  </svg>
+`;
+const ICON_CHEVRON_DOWN = `
+  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="6 9 12 15 18 9"></polyline>
+  </svg>
+`;
 
 const presetsReady = chrome.storage.local
   .get([
@@ -36,6 +48,7 @@ const presetsReady = chrome.storage.local
     "tapoverPercent",
     "tapoverBuyPresets",
     "tapoverSellPresets",
+    "tapoverHidden",
     "fomoUsd",
     "fomoPercent",
     "fomoBuyPresets",
@@ -46,6 +59,7 @@ const presetsReady = chrome.storage.local
     else if (Number(s.fomoUsd) > 0) lastUsd = Number(s.fomoUsd);
     if (Number(s.tapoverPercent) > 0) lastPercent = Number(s.tapoverPercent);
     else if (Number(s.fomoPercent) > 0) lastPercent = Number(s.fomoPercent);
+    if (s.tapoverHidden === true) panelHidden = true;
     buyPresets = normalizeBuy(s.tapoverBuyPresets || s.fomoBuyPresets);
     sellPresets = normalizeSell(s.tapoverSellPresets || s.fomoSellPresets);
   });
@@ -152,6 +166,7 @@ function panelStyles() {
       border-radius: 6px;
       background: #14161c;
       color: #c5c8d0;
+      transition: padding 180ms cubic-bezier(0.16, 1, 0.3, 1), border-color 160ms ease;
     }
     .row {
       display: flex;
@@ -166,7 +181,13 @@ function panelStyles() {
       text-transform: uppercase;
       color: #7a7f8c;
     }
-    .gear {
+    .tools {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+    .icon {
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -179,8 +200,37 @@ function panelStyles() {
       color: #7a7f8c;
       cursor: pointer;
     }
-    .gear:hover { color: #eceef3; background: #1c1f28; }
-    .gear svg { display: block; }
+    .icon:hover { color: #eceef3; background: #1c1f28; }
+    .icon:focus-visible {
+      outline: 1px solid #5c6370;
+      outline-offset: 1px;
+    }
+    .icon svg { display: block; }
+    .body {
+      display: grid;
+      grid-template-rows: 1fr;
+      min-height: 0;
+      transition: grid-template-rows 180ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .body-inner {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .wrap.is-hidden {
+      gap: 0;
+      padding-top: 7px;
+      padding-bottom: 7px;
+      cursor: pointer;
+    }
+    .wrap.is-hidden:hover { border-color: #3a3f4a; }
+    .wrap.is-hidden .body { grid-template-rows: 0fr; }
+    .wrap.is-hidden .gear { display: none; }
+    @media (prefers-reduced-motion: reduce) {
+      .wrap, .body { transition: none; }
+    }
     .sides {
       display: flex;
       height: 28px;
@@ -284,6 +334,22 @@ function setStatus(root, text, tone) {
 
 function currentSide(root) {
   return root.querySelector("[data-side].on-buy, [data-side].on-sell")?.dataset.side || "buy";
+}
+
+function applyPanelHidden(root, hidden) {
+  panelHidden = Boolean(hidden);
+  const wrap = root.querySelector(".wrap");
+  const fold = root.querySelector("[data-fold]");
+  if (!wrap || !fold) return;
+  wrap.classList.toggle("is-hidden", panelHidden);
+  fold.setAttribute("aria-expanded", panelHidden ? "false" : "true");
+  fold.setAttribute("aria-label", panelHidden ? "显示 Tapover" : "隐藏 Tapover");
+  fold.title = panelHidden ? "显示 Tapover" : "隐藏";
+  fold.innerHTML = panelHidden ? ICON_CHEVRON_DOWN : ICON_CHEVRON_UP;
+}
+
+function persistPanelHidden() {
+  chrome.storage.local.set({ tapoverHidden: panelHidden });
 }
 
 function modalStyles() {
@@ -664,7 +730,28 @@ function bindPanel(host, token) {
     applyAmount();
   };
 
-  root.querySelector(".gear").onclick = () => openPresetModal();
+  root.querySelector(".gear").onclick = (e) => {
+    e.stopPropagation();
+    openPresetModal();
+  };
+
+  const fold = root.querySelector("[data-fold]");
+  if (fold) {
+    fold.onclick = (e) => {
+      e.stopPropagation();
+      applyPanelHidden(root, !panelHidden);
+      persistPanelHidden();
+    };
+  }
+  const wrap = root.querySelector(".wrap");
+  if (wrap) {
+    wrap.onclick = () => {
+      if (!panelHidden) return;
+      applyPanelHidden(root, false);
+      persistPanelHidden();
+    };
+  }
+  applyPanelHidden(root, panelHidden);
 
   go.onclick = async () => {
     applyAmount();
@@ -708,26 +795,35 @@ function createHost(token) {
     <div class="wrap">
       <div class="row">
         <span class="brand">Tapover</span>
-        <button class="gear" type="button" aria-label="快捷交易预设" title="快捷交易预设">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-          </svg>
-        </button>
+        <div class="tools">
+          <button class="icon gear" type="button" aria-label="快捷交易预设" title="快捷交易预设">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+          </button>
+          <button class="icon fold" data-fold type="button" aria-label="隐藏 Tapover" title="隐藏" aria-expanded="true">
+            ${ICON_CHEVRON_UP}
+          </button>
+        </div>
       </div>
-      <div class="sides">
-        <button type="button" data-side="buy" class="on-buy">买入</button>
-        <button type="button" data-side="sell">卖出</button>
+      <div class="body">
+        <div class="body-inner">
+          <div class="sides">
+            <button type="button" data-side="buy" class="on-buy">买入</button>
+            <button type="button" data-side="sell">卖出</button>
+          </div>
+          <div class="amount-box">
+            <label>数量</label>
+            <input data-amount inputmode="decimal" value="20" />
+            <span data-unit>USD</span>
+          </div>
+          <div class="presets"></div>
+          <div class="avail">可用 $0.00</div>
+          <button class="go buy" type="button">确认买入 $20</button>
+          <div class="status"></div>
+        </div>
       </div>
-      <div class="amount-box">
-        <label>数量</label>
-        <input data-amount inputmode="decimal" value="20" />
-        <span data-unit>USD</span>
-      </div>
-      <div class="presets"></div>
-      <div class="avail">可用 $0.00</div>
-      <button class="go buy" type="button">确认买入 $20</button>
-      <div class="status"></div>
     </div>
   `;
   bindPanel(host, token);
